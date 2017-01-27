@@ -16,10 +16,13 @@ def list_folder(folder_path):
 
 
 def is_file_executable(filepath):
-    with open(filepath, 'rb') as file_handler:
-        file_header = file_handler.read(4)
-        return (HEADER_WIN in file_header or
-                HEADER_ELF in file_header)
+	try:
+	    with open(filepath, 'rb') as file_handler:
+	        file_header = file_handler.read(4)
+	        return (HEADER_WIN in file_header or
+	                HEADER_ELF in file_header)
+	except IOError as err:
+		print('Exception catched. Skipping file {}'.format(filepath))
 
 
 def find_executable_files(list_of_files):
