@@ -1,51 +1,73 @@
-# -*- coding: windows-1251 -*-
-__author__ = 'm.kruglov'
-__version__ = 1.0
 import os
-import sys
+from argparse import ArgumentParser
+
+HEADER_WIN = b'MZ'
+HEADER_ELF = b'ELF'
 
 
-#### Usage ####
-# Первый аргумент - путь до папки с бинарями.
-# Второй - путь до файла с отчетом.
-# Если не указать второй аргумент, будет подставлен по умолчанию (./binaries.tre)
-# Если не указать первый аргумент, будет работать по текущему каталогу.
-
-def main():
-	if len(sys.argv) >= 2:
-		dir_to_analyse = sys.argv[1]
-
-		if len(sys.argv) == 3:
-			output_file = sys.argv[2]
-		else:
-			output_file = './binaries.tre'
-	else:
-		dir_to_analyse = os.getcwd().replace('\\', '/') + '/'
-		output_file = './binaries.tre'
-
-	dir_to_analyse = os.path.abspath(dir_to_analyse)
-	counter = binaries(dir_to_analyse, output_file)
-	print('Found:', counter)
-	print('Saved to', output_file)
+def list_folder(folder_path):
+    files = []
+    for root, dirname, filenames in os.walk(folder_path):
+        for filename in filenames:
+            filepath = os.path.join(root, filename)
+            real_filepath = os.path.abspath(os.path.realpath(filepath))
+            files.append(real_filepath)
+    return files
 
 
+def is_file_executable(filepath):
+    with open(filepath, 'rb') as file_handler:
+        file_header = file_handler.read(4)
+        return (HEADER_WIN in file_header or
+                HEADER_ELF in file_header)
 
 
-dir = 'c:/Balabit/bin_compare/pairs/LAB/'
-output = 'c:/Balabit/bin_compare/pairs/lab_balabit.txt'
+def find_executable_files(list_of_files):
+    files = [filepath for filepath in list_of_files if
+             is_file_executable(filepath)]
+    return files
 
-def binaries(dirs, output):
-	counter = 0
-	with open(output, 'w') as tre:
-		for root, dirs, files in os.walk(dirs):
-			for name in files:
-				curname = os.path.join(root, name)
-				with open(curname, 'rb') as curfile:
-					start = curfile.read(4)
-					if b'MZ' in start[:2] or b'ELF' in start[1:]:
-						counter += 1
-						tre.write(curname.replace('\\', '/') + '\n')
-	return counter
+
+def list_files_extension(list_of_files):
+    extensions = set([os.path.splitext(filepath)[1] for
+                      filepath in list_of_files])
+    return extensions
+
+
+def make_report_file(report_filepath, list_of_files, extensions):
+    with open(report_filepath, 'w') as report:
+        if extensions:
+            for extension in extensions:
+                report.write('{}\n'.format(extension))
+            report.write('-----\n')
+        for filepath in list_of_files:
+            report.write('{}\n'.format(filepath))
+
 
 if __name__ == "__main__":
-    main()
+    parser = ArgumentParser(description='List all executable files in folder')
+    parser.add_argument('path_to_folder', nargs='?', default='./',
+                        help='path to folder to search in (default is current folder)')
+    parser.add_argument('path_to_report', nargs='?', default='./found_binaries.txt',
+                        help='path to report file (default is %(default)s)')
+    parser.add_argument('-e', '--extensions', action='store_true', default=False,
+                        help='list all found extensions to report file')
+    args = parser.parse_args()
+
+    folder_fullpath = os.path.abspath(os.path.realpath(args.path_to_folder))
+    report_fullpath = os.path.abspath(os.path.realpath(args.path_to_report))
+    if not os.path.isdir(folder_fullpath):
+        print('Check twice, because folder not found: {}'.format(folder_fullpath))
+        exit(-1)
+
+    files_from_folder = list_folder(folder_fullpath)
+    print('Found {} files'.format(len(files_from_folder)))
+    executable_files = find_executable_files(files_from_folder)
+    print('Executable files found {}'.format(len(executable_files)))
+
+    if args.extensions:
+        extensions = list_files_extension(executable_files)
+    else:
+        extensions = []
+
+    make_report_file(report_fullpath, executable_files, extensions)
